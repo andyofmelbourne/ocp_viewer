@@ -113,7 +113,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.input_params = {}
         self.input_params['integration_depth'] = 1
         self.input_params['livestream']        = False
-        self.input_params['directory']         = '/home/amorgan/Physics/git_repos/ocp_viewer/20141103/'
+        self.input_params['directory']         = 'Z:/20141103/'
 
         # initialisation of GUI and network functions
         self.initUI()
@@ -122,13 +122,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
 
     def update_display_data(self):
         """ network data --> display data --> call update image (if needed) """
-        # live streaming ?
-        if self.input_params['livestream'] == False :
-            return False
         
         # copy the data from the network data
         fnam, event_id = get_fnams(self.input_params['directory'], self.display_data['event_id'])
         self.display_data['event_id'] = event_id
+	print fnam
         
         # load the image 
         self.display_data['cspad_raw'] = scipy.misc.imread(fnam)
@@ -140,7 +138,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         rad_prof, raw_counts = rp.radial_profile_integrate(self.display_data['cspad_raw'].astype(numpy.int64), self.cspad_rads, 0, self.cspad_rads.max())
         self.display_data['cspad_raw_radial_profile'] = rad_prof
         self.display_data['cspad_raw_counts'].append(raw_counts)
-        print 'raw counts', raw_counts
+        #print 'raw counts', raw_counts
 
         # histogram
         #bins = numpy.arange(self.display_data['cspad_raw'].min(), self.display_data['cspad_raw'].max(), 1)
@@ -196,8 +194,12 @@ class MainFrame(PyQt4.QtGui.QWidget):
     def init_timer(self):
         """ Update the image every milli_secs. """
         self.refresh_timer = PyQt4.QtCore.QTimer()
-        self.refresh_timer.timeout.connect(self.update_display_data)
+        self.refresh_timer.timeout.connect(self.update_data_stream)
         self.refresh_timer.start(self.zmq_timer)
+
+    def update_data_stream(self):
+	if self.input_params['livestream'] == True :
+            self.update_display_data()
 
 
     def initUI(self):
@@ -288,6 +290,14 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.loadStateButton = PyQt4.QtGui.QPushButton("load state", self)
         self.loadStateButton.clicked.connect(self.loadState)
 
+        # back button
+        self.backButton = PyQt4.QtGui.QPushButton("back one event", self)
+        self.backButton .clicked.connect(self.back_event)
+
+        # forward button
+        self.forwardButton = PyQt4.QtGui.QPushButton("forward one event", self)
+        self.forwardButton.clicked.connect(self.forward_event)
+
         # Add all the stuff to the layout
         hlayouts = []
 
@@ -344,6 +354,10 @@ class MainFrame(PyQt4.QtGui.QWidget):
         hlayouts.append(PyQt4.QtGui.QHBoxLayout())
         hlayouts[-1].addWidget(self.directory_label)
         hlayouts[-1].addWidget(self.directory_lineedit)
+
+	# back and forwards buttons
+        hlayouts[-1].addWidget(self.backButton)
+        hlayouts[-1].addWidget(self.forwardButton)
 
         # stack everything vertically 
         vlayout = PyQt4.QtGui.QVBoxLayout()
@@ -412,7 +426,14 @@ class MainFrame(PyQt4.QtGui.QWidget):
         print 'done'
 
     def update_directory(self):
-        self.input_params['directory'] = self.directory_lineedit.text()
+        self.input_params['directory'] = str(self.directory_lineedit.text())
+
+    def back_event(self):
+        self.display_data['event_id'] -= 2
+        self.update_display_data()
+
+    def forward_event(self):
+        self.update_display_data()
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)    # allow Control-C 
