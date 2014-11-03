@@ -88,7 +88,6 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.zmq_timer = 2000                # milli seconds
         self.integration_depth_counter = 0
         self.cspad_shape = (1024, 1024)
-        self.data_dir = '/home/amorgan/Physics/git_repos/ocp_viewer/20141103/'
         x, y = numpy.indices(self.cspad_shape)
         x -= self.cspad_shape[0]/2 - 1
         y -= self.cspad_shape[1]/2 - 1
@@ -114,6 +113,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.input_params = {}
         self.input_params['integration_depth'] = 1
         self.input_params['livestream']        = False
+        self.input_params['directory']         = '/home/amorgan/Physics/git_repos/ocp_viewer/20141103/'
 
         # initialisation of GUI and network functions
         self.initUI()
@@ -127,7 +127,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
             return False
         
         # copy the data from the network data
-        fnam, event_id = get_fnams(self.data_dir, self.display_data['event_id'])
+        fnam, event_id = get_fnams(self.input_params['directory'], self.display_data['event_id'])
         self.display_data['event_id'] = event_id
         
         # load the image 
@@ -269,6 +269,13 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.radiusroimax_lineedit.setText(str(self.display_data['radiusroimax']))
         self.radiusroimax_lineedit.editingFinished.connect(self.update_roi)
  
+        # directory
+        self.directory_label = PyQt4.QtGui.QLabel(self)
+        self.directory_label.setText('Directory to scan use /\'s:')
+        self.directory_lineedit = PyQt4.QtGui.QLineEdit(self)
+        self.directory_lineedit.setText(self.input_params['directory'])
+        self.directory_lineedit.editingFinished.connect(self.update_directory)
+
         # live stream checkbox
         self.livestream_checkbox = PyQt4.QtGui.QCheckBox('Live Stream', self)
         self.livestream_checkbox.stateChanged.connect(self.update_livestream)
@@ -333,6 +340,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
         vlayout0.addWidget(self.livestream_checkbox)
         hlayouts[-1].addLayout(vlayout0)
 
+        # directory input layout
+        hlayouts.append(PyQt4.QtGui.QHBoxLayout())
+        hlayouts[-1].addWidget(self.directory_label)
+        hlayouts[-1].addWidget(self.directory_lineedit)
+
         # stack everything vertically 
         vlayout = PyQt4.QtGui.QVBoxLayout()
         for hlayout in hlayouts :
@@ -381,7 +393,6 @@ class MainFrame(PyQt4.QtGui.QWidget):
         f.close()
         print 'done'
 
-
     def loadState(self):
         fnam = PyQt4.QtGui.QFileDialog.getOpenFileName(self, 'Open file', './')
         print 'reading from file:', fnam, type(fnam)
@@ -400,6 +411,8 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.update_image()
         print 'done'
 
+    def update_directory(self):
+        self.input_params['directory'] = self.directory_lineedit.text()
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)    # allow Control-C 
