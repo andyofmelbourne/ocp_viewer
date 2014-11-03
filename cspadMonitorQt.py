@@ -164,6 +164,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
 
         self.imageWidget.setImage(self.display_data['cspad_raw'], autoRange = False, autoLevels = False, autoHistogramRange = False)
 
+        self.histWidget.clear()
         self.histWidget.plot(self.display_data['cspad_raw_bins'][1 :-1], self.display_data['cspad_raw_histogram'][1 :] + 1)
         
         self.countsWidget.clear()
