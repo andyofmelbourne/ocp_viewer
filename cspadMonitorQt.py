@@ -42,8 +42,8 @@ import radial_profile as rp
 from datetime import datetime
 import h5py
 
-def get_fnams(directory, event_id = None):
-    """If event_id is not None then get the next event else get the latest
+def get_fnams(directory, event_id = -1):
+    """If event_id is not -1 then get the next event else get the latest
     
     e.g.
     event_id = 0000181
@@ -54,21 +54,22 @@ def get_fnams(directory, event_id = None):
             fnam_abs = os.path.join(dirname, filename)
             fnams.append(fnam_abs)
     
-    if event_id is None :
+    if event_id == -1 :
         fnams.sort()
         fnam_out = fnams[-1]
-        new_id = None
+        # get the event id
+        new_id = int(fnam_out[-27 : -27 + 7])
     else :
         fnam_out = None
         for i in range(1, 10000):
-            #print 'matching:', '*'+str(event_id + i).zfill(7)+'*.png'
-            fnam_out = fnmatch.filter(fnams, '*'+str(event_id + i).zfill(7)+'*.png')
+            #print 'matching:', '*'+str(event_id).zfill(7)+'*.png'
+            fnam_out = fnmatch.filter(fnams, '*'+str(event_id).zfill(7)+'*.png')
             #print fnam_out
             if fnam_out != []:
-                new_id = event_id + i
+                new_id = event_id 
                 break
         if fnam_out is None or len(fnam_out) > 1 or fnam_out == [] :
-            raise ValueError('Next event not found, with id', '*'+str(event_id + i).zfill(7)+'*.png')
+            raise ValueError('Next event not found, with id', '*'+str(event_id).zfill(7)+'*.png')
         fnam_out = fnam_out[0]
         
     return fnam_out, new_id
@@ -85,7 +86,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         
         # parameters
         self.title = 'OCP Monitor'
-        self.zmq_timer = 2000                # milli seconds
+        self.zmq_timer = 1000                # milli seconds
         self.integration_depth_counter = 0
         self.cspad_shape = (1024, 1024)
         x, y = numpy.indices(self.cspad_shape)
@@ -104,8 +105,6 @@ class MainFrame(PyQt4.QtGui.QWidget):
         dis_temp['cspad_raw_radial_profile']    = numpy.zeros_like(dis_temp['cspad_raw_radial_values'])
         dis_temp['event_id']                    = 0
         dis_temp['frames']                      = 0
-        dis_temp['radiusroimin']                = 0
-        dis_temp['radiusroimax']                = 0
         #
         self.display_data = dis_temp
         
@@ -114,6 +113,9 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.input_params['integration_depth'] = 1
         self.input_params['livestream']        = False
         self.input_params['directory']         = 'Z:/20141103/'
+        self.input_params['threshold']         = 0
+        self.input_params['radiusroimin']      = 0
+        self.input_params['radiusroimax']      = 0
 
         # initialisation of GUI and network functions
         self.initUI()
@@ -124,12 +126,18 @@ class MainFrame(PyQt4.QtGui.QWidget):
         """ network data --> display data --> call update image (if needed) """
         
         # copy the data from the network data
-        fnam, event_id = get_fnams(self.input_params['directory'], self.display_data['event_id'])
+	if self.input_params['livestream'] == True :
+            fnam, event_id = get_fnams(self.input_params['directory'], -1)
+        else :
+            fnam, event_id = get_fnams(self.input_params['directory'], self.display_data['event_id'])
         self.display_data['event_id'] = event_id
 	print fnam
         
         # load the image 
         self.display_data['cspad_raw'] = scipy.misc.imread(fnam)
+
+        # apply the threshold
+        self.display_data['cspad_raw'][numpy.where(self.display_data['cspad_raw'] < self.input_params['threshold'])] = 0
 
         # apply the ROI
         self.display_data['cspad_raw'][self.roi] = 0
@@ -264,11 +272,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.radiusroi_label.setText('Radius ROI (Min,Max):')
         self.radiusroimin_lineedit = PyQt4.QtGui.QLineEdit(self)
         self.radiusroimin_lineedit.setValidator(self.qtfloatvalidator)
-        self.radiusroimin_lineedit.setText(str(self.display_data['radiusroimin']))
+        self.radiusroimin_lineedit.setText(str(self.input_params['radiusroimin']))
         self.radiusroimin_lineedit.editingFinished.connect(self.update_roi)
         self.radiusroimax_lineedit = PyQt4.QtGui.QLineEdit(self)
         self.radiusroimax_lineedit.setValidator(self.qtfloatvalidator)
-        self.radiusroimax_lineedit.setText(str(self.display_data['radiusroimax']))
+        self.radiusroimax_lineedit.setText(str(self.input_params['radiusroimax']))
         self.radiusroimax_lineedit.editingFinished.connect(self.update_roi)
  
         # directory
@@ -297,6 +305,14 @@ class MainFrame(PyQt4.QtGui.QWidget):
         # forward button
         self.forwardButton = PyQt4.QtGui.QPushButton("forward one event", self)
         self.forwardButton.clicked.connect(self.forward_event)
+
+        # directory
+        self.threshold_label = PyQt4.QtGui.QLabel(self)
+        self.threshold_label.setText('threshold adus:')
+        self.threshold_lineedit = PyQt4.QtGui.QLineEdit(self)
+        self.threshold_lineedit.setText(str(self.input_params['threshold']))
+        self.threshold_lineedit.setValidator(self.qtintvalidator)
+        self.threshold_lineedit.editingFinished.connect(self.update_threshold)
 
         # Add all the stuff to the layout
         hlayouts = []
@@ -359,6 +375,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
         hlayouts[-1].addWidget(self.backButton)
         hlayouts[-1].addWidget(self.forwardButton)
 
+        # threshold layout
+        hlayouts.append(PyQt4.QtGui.QHBoxLayout())
+        hlayouts[-1].addWidget(self.threshold_label)
+        hlayouts[-1].addWidget(self.threshold_lineedit)
+
         # stack everything vertically 
         vlayout = PyQt4.QtGui.QVBoxLayout()
         for hlayout in hlayouts :
@@ -384,14 +405,13 @@ class MainFrame(PyQt4.QtGui.QWidget):
     def update_roi(self):
         new_radiusroimin = float(self.radiusroimin_lineedit.text())
         new_radiusroimax = float(self.radiusroimax_lineedit.text())
-        if new_radiusroimin != self.display_data['radiusroimin'] or new_radiusroimax != self.display_data['radiusroimax'] :
-            self.display_data['radiusroimin'] = new_radiusroimin
-            self.display_data['radiusroimax'] = new_radiusroimax
+        if new_radiusroimin != self.input_params['radiusroimin'] or new_radiusroimax != self.input_params['radiusroimax'] :
+            self.input_params['radiusroimin'] = new_radiusroimin
+            self.input_params['radiusroimax'] = new_radiusroimax
             temp = (self.cspad_rads > new_radiusroimin) * (self.cspad_rads < new_radiusroimax)
             self.roi = numpy.where(temp == False)
             print 'New ROI:', new_radiusroimin, new_radiusroimax
-            self.display_data['cspad_raw'][self.roi] = 0
-            self.update_image()
+            self.update_display_data()
         
     def saveState(self):
         """Save all of the class variables to a h5 file with a time"""
@@ -404,6 +424,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
             print 'writing ', k, ' of type ', type(self.display_data[k])
             if self.display_data[k] is not None :
                 dis_h5.create_dataset(k, data = self.display_data[k])
+        inp_h5 = f.create_group('input_params')
+        for k in self.input_params.keys() :
+            print 'writing ', k, ' of type ', type(self.input_params[k])
+            if self.input_params[k] is not None :
+                inp_h5.create_dataset(k, data = self.input_params[k])
         f.close()
         print 'done'
 
@@ -418,22 +443,40 @@ class MainFrame(PyQt4.QtGui.QWidget):
         for k in display_data.keys() :
             print 'reading ', k, ' of type ', type(display_data[k].value)
             self.display_data[k] = display_data[k].value
+        input_params = f['input_params']
+        for k in input_params.keys() :
+            print 'reading ', k, ' of type ', type(input_params[k].value)
+            self.input_params[k] = input_params[k].value
         f.close()
         
         self.display_data['cspad_raw_counts']       = list(self.display_data['cspad_raw_counts'])
+
+        self.directory_lineedit.setText(self.input_params['directory'])
+        self.threshold_lineedit.setText(str(self.input_params['threshold']))
+        self.radiusroimin_lineedit.setText(str(self.input_params['radiusroimin']))
+        self.radiusroimax_lineedit.setText(str(self.input_params['radiusroimax']))
 
         self.update_image()
         print 'done'
 
     def update_directory(self):
         self.input_params['directory'] = str(self.directory_lineedit.text())
+        if self.input_params['directory'][-1] != '/':
+            self.input_params['directory'] += '/'
+        self.directory_lineedit.setText(self.input_params['directory'])
 
     def back_event(self):
-        self.display_data['event_id'] -= 2
+        self.display_data['event_id'] -= 1
         self.update_display_data()
 
     def forward_event(self):
+        self.display_data['event_id'] += 1
         self.update_display_data()
+
+    def update_threshold(self):
+        self.input_params['threshold'] = int(self.threshold_lineedit.text())
+        self.update_display_data()
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)    # allow Control-C 
