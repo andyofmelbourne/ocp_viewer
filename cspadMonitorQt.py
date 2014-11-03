@@ -116,6 +116,8 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.input_params['threshold']         = 0
         self.input_params['radiusroimin']      = 0
         self.input_params['radiusroimax']      = 0
+        self.input_params['centrei']           = 511
+        self.input_params['centrej']           = 511
 
         # initialisation of GUI and network functions
         self.initUI()
@@ -135,6 +137,10 @@ class MainFrame(PyQt4.QtGui.QWidget):
         
         # load the image 
         self.display_data['cspad_raw'] = scipy.misc.imread(fnam)
+
+        # roll the axis
+        self.display_data['cspad_raw'] = numpy.roll(self.display_data['cspad_raw'], self.input_params['centrei'] - self.cspad_shape[0]/2 - 1, 0)
+        self.display_data['cspad_raw'] = numpy.roll(self.display_data['cspad_raw'], self.input_params['centrej'] - self.cspad_shape[1]/2 - 1, 1)
 
         # apply the threshold
         self.display_data['cspad_raw'][numpy.where(self.display_data['cspad_raw'] < self.input_params['threshold'])] = 0
@@ -231,7 +237,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.imageWidget = pyqtgraph.ImageView(self)
         self.imageWidget.ui.normBtn.hide()
         self.imageWidget.ui.roiBtn.hide()
-        self.imageWidget.setLevels(0, 40)
+        #self.imageWidget.setLevels(0, 40)
 
         # cspad histogram viewer
         self.histWidget = pyqtgraph.PlotWidget(self)
@@ -279,6 +285,18 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.radiusroimax_lineedit.setValidator(self.qtfloatvalidator)
         self.radiusroimax_lineedit.setText(str(self.input_params['radiusroimax']))
         self.radiusroimax_lineedit.editingFinished.connect(self.update_roi)
+
+        # cenre i j
+        self.centreij_label = PyQt4.QtGui.QLabel(self)
+        self.centreij_label.setText('centre (i,j):')
+        self.centrei_lineedit = PyQt4.QtGui.QLineEdit(self)
+        self.centrei_lineedit.setValidator(self.qtintvalidator)
+        self.centrei_lineedit.setText(str(self.input_params['centrei']))
+        self.centrei_lineedit.editingFinished.connect(self.update_centre)
+        self.centrej_lineedit = PyQt4.QtGui.QLineEdit(self)
+        self.centrej_lineedit.setValidator(self.qtintvalidator)
+        self.centrej_lineedit.setText(str(self.input_params['centrej']))
+        self.centrej_lineedit.editingFinished.connect(self.update_centre)
  
         # directory
         self.directory_label = PyQt4.QtGui.QLabel(self)
@@ -376,8 +394,14 @@ class MainFrame(PyQt4.QtGui.QWidget):
         hlayouts[-1].addWidget(self.backButton)
         hlayouts[-1].addWidget(self.forwardButton)
 
-        # threshold layout
         hlayouts.append(PyQt4.QtGui.QHBoxLayout())
+
+        # centre i j layout
+        hlayouts[-1].addWidget(self.centreij_label)
+        hlayouts[-1].addWidget(self.centrei_lineedit)
+        hlayouts[-1].addWidget(self.centrej_lineedit)
+
+        # threshold layout
         hlayouts[-1].addWidget(self.threshold_label)
         hlayouts[-1].addWidget(self.threshold_lineedit)
 
@@ -478,6 +502,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.input_params['threshold'] = int(self.threshold_lineedit.text())
         self.update_display_data()
 
+    def update_centre(self):
+        self.input_params['centrei'] = int(self.centrei_lineedit.text())
+        self.input_params['centrej'] = int(self.centrej_lineedit.text())
+        print 'new centre', self.input_params['centrei'], self.input_params['centrej'] 
+        self.update_display_data()
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)    # allow Control-C 
