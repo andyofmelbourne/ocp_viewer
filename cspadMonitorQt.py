@@ -1,30 +1,4 @@
 #!/usr/bin/env python
-"""
-vmiViewer:
-A GUI for monitoring Velocity-Map-Imaging (VMI).
-
-Unagi is a Japanese word for 'total state of awareness'
-For more explanation:
-http://www.youtube.com/watch?v=OJOYdAkIDq0
-
-Copyright (c) Chun Hong Yoon
-chun.hong.yoon@desy.de
-
-This file is part of UNAGI.
-
-UNAGI is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-UNAGI is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with UNAGI.  If not, see <http://www.gnu.org/licenses/>.
-"""
 
 import sys
 import os
@@ -49,11 +23,12 @@ def load_png_Valerio(fnam):
     png_reader=png.Reader(fnam)
     data=png_reader.asDirect()[2]
     image_2d = numpy.vstack(itertools.imap(numpy.ushort, data))
-
+    
     return image_2d.astype(numpy.int32)
 
 
-files = dict()
+files     = dict()
+file_keys = []
 class FnamEventHandler(FileSystemEventHandler):
     def on_created(self, event):
         print event.src_path, event.is_directory
@@ -61,7 +36,9 @@ class FnamEventHandler(FileSystemEventHandler):
             if event.src_path[-3 :] == 'png':
                 fnam = os.path.basename(event.src_path)
                 global files
-                files[fnam[:7]] = event.src_path
+                global file_keys
+                file_keys.append(fnam[:7])
+                files[file_keys[-1]] = event.src_path
 
 
 def fill_current_file_list(directory = '/home/amorgan/Physics/git_repos/ocp_viewer/20141103/'):
@@ -71,32 +48,39 @@ def fill_current_file_list(directory = '/home/amorgan/Physics/git_repos/ocp_view
             fnam_abs = os.path.join(dirname, filename)
             fnams[filename[:7]] = fnam_abs
     global files
+    global file_keys
     files = fnams
+    # 
+    print 'loaded file list under selected directory:'
+    file_keys = files.keys()
+    file_keys.sort()
+    for k in file_keys:
+        print k, files[k]
 
 
-def get_fnams(directory, event_id = -1):
-    """If event_id is not -1 then get the next event else get the latest
+def get_fnams(directory, event_index = -1):
+    """If event_index is not -1 then get the next event else get the latest
     
     e.g.
-    event_id = 0000181
+    event_index = 0000181
     """
     global files
+    global file_keys
     if len(files) == 0 :
         raise ValueError('No files found in:', directory)
-
-    if event_id == -1 :
-        ids = files.keys()
-        ids.sort()
-        fnam_out = files[ids[-1]]
-        # get the event id
-        new_id = int(ids[-1])
+    
+    if event_index == -1 :
+        fnam_out = files[file_keys[-1]]
+        # get the event index
+        new_id = len(file_keys)
     else :
-        if files.has_key(str(event_id).zfill(7)):
-            new_id   = event_id
-            fnam_out = files[str(event_id).zfill(7)]
+        if event_index >= 0 and event_index < len(file_keys):
+            new_id   = event_index
+            fnam_out = files[file_keys[event_index]]
         else :
-            fnam_out = files[files.keys[-1]]
-            new_id   = int(files.keys[-1])
+            print 'end of the line (you are at the latest event)'
+            new_id   = event_index
+            fnam_out = files[file_keys[-1]]
     
     return fnam_out, new_id
 
@@ -108,14 +92,14 @@ class MainFrame(PyQt4.QtGui.QWidget):
     
     def __init__(self):
         super(MainFrame, self).__init__()
-
+        
         # parameters
         self.title = 'OCP Monitor'
         self.zmq_timer = 1000                # milli seconds
         self.integration_depth_counter = 0
         self.ring_pen = pyqtgraph.mkPen('r', width=2)
         self.display_data = dict()
-
+        
         # set image size dependent parameters
         self.cspad_shape = (1024, 1024)
         x, y = numpy.indices(self.cspad_shape)
@@ -124,7 +108,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.cspad_rads = numpy.sqrt(y**2 + x**2).astype(numpy.int)
         self.roi = numpy.ones(self.cspad_shape, dtype=numpy.bool)
         self.roi = numpy.where(self.roi == False)
-
+        
         self.display_data['cspad_raw_counts']            = []
         self.display_data['cspad_hit_rate']              = []
         self.display_data['cspad_raw_histogram']         = None
@@ -133,18 +117,18 @@ class MainFrame(PyQt4.QtGui.QWidget):
         self.display_data['cspad_raw_radial_profile']    = numpy.zeros_like(self.display_data['cspad_raw_radial_values'])
         self.display_data['frames']                      = 0
         self.display_data['last_file']                   = None
-
+        
         # user controlled parameters
         self.input_params = dict()
         self.input_params['integration_depth'] = 1
         self.input_params['livestream']        = True
-        self.input_params['directory']         = os.path.abspath('.')
+        self.input_params['directory']         = os.path.abspath('Z:\\')
         self.input_params['threshold']         = 0
         self.input_params['radiusroimin']      = 0
         self.input_params['radiusroimax']      = 0
         self.input_params['centrei']           = self.cspad_shape[0]/2 - 1
         self.input_params['centrej']           = self.cspad_shape[1]/2 - 1
-
+        
         # initialisation of GUI and network functions
         # fill the files dict --> global variable files
         fill_current_file_list(self.input_params['directory'])
@@ -169,6 +153,7 @@ class MainFrame(PyQt4.QtGui.QWidget):
         if fnam is None:
             return 0
 
+        global file_keys
         self.display_data['event_id'] = event_id
 
         if self.display_data['last_file'] != fnam:
@@ -217,11 +202,11 @@ class MainFrame(PyQt4.QtGui.QWidget):
         if len(self.display_data['cspad_raw_counts']) >= depth :
             counts = numpy.array(self.display_data['cspad_raw_counts'])
             hit_rate = numpy.sum(counts[-depth :] > self.input_params['threshold']) / float(depth)
-            print 'hit rate: ', hit_rate
+            #print 'hit rate: ', hit_rate
         else :
             counts = numpy.array(self.display_data['cspad_raw_counts'])
             hit_rate = numpy.sum(counts > self.input_params['threshold']) / float(counts.size)
-            print 'hit rate: ', hit_rate
+            #print 'hit rate: ', hit_rate
         self.display_data['cspad_hit_rate'].append(hit_rate)
 
         # histogram
