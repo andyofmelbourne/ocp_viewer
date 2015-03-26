@@ -23,22 +23,21 @@ def load_png_Valerio(fnam):
     png_reader=png.Reader(fnam)
     data=png_reader.asDirect()[2]
     image_2d = numpy.vstack(itertools.imap(numpy.ushort, data))
-    
-    return image_2d.astype(numpy.int32)
+    return image_2d
 
 
 files     = dict()
 file_keys = []
 class FnamEventHandler(FileSystemEventHandler):
     def on_created(self, event):
-        print event.src_path, event.is_directory
+        print event.src_path
         if event.is_directory == False :
             if event.src_path[-3 :] == 'png':
                 fnam = os.path.basename(event.src_path)
                 global files
                 global file_keys
                 file_keys.append(fnam[:7])
-                files[file_keys[-1]] = event.src_path
+                files[file_keys[-1]] = str(os.path.abspath(event.src_path))
 
 
 def fill_current_file_list(directory = '/home/amorgan/Physics/git_repos/ocp_viewer/20141103/'):
